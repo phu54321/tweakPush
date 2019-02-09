@@ -1,0 +1,14 @@
+{
+  "name": "tweakpush",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Hyun Woo Park",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "ar": "0.0.1"
+  }
+}
