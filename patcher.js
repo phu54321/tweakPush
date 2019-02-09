@@ -71,8 +71,13 @@ ldid().then(async runtime => {
       const patchedData = iconv.encode(data, 'binary')
 
       runtime.writeFile(patchedData, 'temp.dylib')
-      runtime.ldid_S('temp.dylib', null)
-      runtime.ldid2_S('temp.dylib', null)
+      if (
+        runtime.ldid_S('temp.dylib', null) !== 0 ||
+        runtime.ldid2_S('temp.dylib', null) !== 0
+      ) {
+        console.log('ldid failed! Patcher failed.')
+        throw new Error('ldid failed')
+      }
       fileData = runtime.readFile('temp.dylib')
 
       executableFiles.push(name)
@@ -92,7 +97,6 @@ ldid().then(async runtime => {
   })
   paylodDirectories = [...new Set(paylodDirectories)]
   paylodDirectories.sort()
-  console.log(paylodDirectories)
 
   const zip = new jszip()
   dylibPatchedFiles.forEach(({name, fileData, permissions}) => {
@@ -112,7 +116,6 @@ ldid().then(async runtime => {
   zip.file('install', installerSh, {
     unixPermissions: '755'
   })
-  console.log(installerSh)
 
   let uninstallerSh = '#!/bin/sh\n'
   uninstallerSh += payloadFiles.map(name => `rm -f "/${name}"\n`).join('')
@@ -130,6 +133,7 @@ ldid().then(async runtime => {
   })
     .pipe(fs.createWriteStream(ofname))
     .on('finish', function () {
-      console.log("done!");
+      console.log("done! Quitting after 3sec");
+      setTimeout(() => { }, 3000)
     });
 })
