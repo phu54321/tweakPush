@@ -106,7 +106,7 @@ ldid().then(async runtime => {
   })
 
   // Create .sh
-  let installerSh = '#!/bin/sh\n'
+  let installerSh = '#!/var/containers/Bundle/iosbinpack64/bin/sh\n'
   installerSh += paylodDirectories.map(name => `mkdir -p "/${name}"\n`).join('')
   installerSh += payloadFiles.map(name =>
     `cp "Payload/${name}" "/${name}"\n` +
@@ -117,7 +117,7 @@ ldid().then(async runtime => {
     unixPermissions: '755'
   })
 
-  let uninstallerSh = '#!/bin/sh\n'
+  let uninstallerSh = '#!/var/containers/Bundle/iosbinpack64/bin/sh\n'
   uninstallerSh += payloadFiles.map(name => `rm -f "/${name}"\n`).join('')
 
   zip.file('uninstall', uninstallerSh, {
