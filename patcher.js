@@ -1,10 +1,11 @@
 const ar = require('ar');
 const fs = require('fs');
 const xzdec = require('./xzdec');
-const untar = require('untar.js');
+const untar = require('./untar');
 const iconv = require('iconv-lite');
 const ldid = require('./ldid');
 const jszip = require('jszip')
+const path = require('path')
 const { decompress: lzmadec } = require('lzma/src/lzma_worker-min').LZMA
 const os = require('os')
 const process = require('process')
@@ -44,21 +45,20 @@ ldid().then(async runtime => {
 
 
   // dylib patch
+  const payloadFiles = []
+  const executableFiles = []
   const dylibPatchedFiles = dataFiles.map(f => {
     let { name, fileData, mode: permissions } = f
     if (name.startsWith('./')) name = name.substr(2)
+    if (name.endsWith('.deb')) return  // ignore deb file (maybe metafile?)
+    if (name.startsWith('Library/')) name = 'var/LIB/' + name.substr(8)
+  
+    // fix for some offending things
     console.log(name, fileData.length)
-    if (
-      (
-        (
-          name.startsWith('Library/MobileSubstrate/DynamicLibraries/') ||
-          name.startsWith('usr/lib/')
-         ) &&
-        name.endsWith('.dylib')
-      ) ||
-      name.match(/$Library\/PreferenceBundles\/.+\/.+/)
-    ) {
-      console.log(` - applying ldid`)
+
+    const buf = Buffer.from(fileData.slice(0, 8))
+    if (buf.readUInt32BE(0) === 0xcafebabe) {
+      console.log(` - applying ldid & ldid2`)
 
       let data = iconv.decode(fileData, 'binary')
       data = data.replace(/\/Library\//g, '/var/LIB/')
@@ -72,25 +72,53 @@ ldid().then(async runtime => {
 
       runtime.writeFile(patchedData, 'temp.dylib')
       runtime.ldid_S('temp.dylib', null)
-      fileData = runtime.readFile('temp.dylib')
-    }
-
-    if (name.endsWith('.dylib')) {
-      console.log(` - applying ldid2`)
-
-      runtime.writeFile(fileData, 'temp.dylib')
       runtime.ldid2_S('temp.dylib', null)
       fileData = runtime.readFile('temp.dylib')
+
+      executableFiles.push(name)
     }
 
+    payloadFiles.push(name)
     return { name, fileData, permissions }
+  }).filter(x => x)
+
+  let paylodDirectories = []
+  payloadFiles.forEach(name => {
+    let lastSlash
+    while ((lastSlash = name.lastIndexOf('/')) !== -1) {
+      name = name.substr(0, lastSlash)
+      paylodDirectories.push(name)
+    }
   })
+  paylodDirectories = [...new Set(paylodDirectories)]
+  paylodDirectories.sort()
+  console.log(paylodDirectories)
 
   const zip = new jszip()
   dylibPatchedFiles.forEach(({name, fileData, permissions}) => {
-    zip.file(name, fileData, {
+    zip.file('Payload/' + name, fileData, {
       unixPermissions: permissions
     })
+  })
+
+  // Create .sh
+  let installerSh = '#!/bin/sh\n'
+  installerSh += paylodDirectories.map(name => `mkdir -p "/${name}"\n`).join('')
+  installerSh += payloadFiles.map(name =>
+    `cp "Payload/${name}" "/${name}"\n` +
+    `chown mobile "/${name}"\n`
+  ).join('')
+  installerSh += executableFiles.map(name => `inject "/${name}"\n`).join('')
+  zip.file('install', installerSh, {
+    unixPermissions: '755'
+  })
+  console.log(installerSh)
+
+  let uninstallerSh = '#!/bin/sh\n'
+  uninstallerSh += payloadFiles.map(name => `rm -f "/${name}"\n`).join('')
+
+  zip.file('uninstall', uninstallerSh, {
+    unixPermissions: '755'
   })
 
   zip
