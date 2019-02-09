@@ -5,6 +5,7 @@ const untar = require('./untar');
 const iconv = require('iconv-lite');
 const ldid = require('./ldid');
 const jszip = require('jszip')
+const pako = require('pako')
 const path = require('path')
 const { decompress: lzmadec } = require('lzma/src/lzma_worker-min').LZMA
 const os = require('os')
@@ -36,10 +37,14 @@ ldid().then(async runtime => {
   const dataTarCompressed = dataF.fileData()
 
   let dataTarContent
-  if (dataF.name().endsWith('.xz')) {
+  if (dataF.name() === 'data.tar') {
+    dataTarContent = dataTarCompressed
+  } else if (dataF.name().endsWith('.xz')) {
     dataTarContent = xzdec(dataTarCompressed)
   } else if (dataF.name().endsWith('.lzma')) {
     dataTarContent = lzmadec(dataTarCompressed)
+  } else if (dataF.name().endsWith('.gz')) {
+    dataTarContent = pako.inflate(dataTarCompressed)
   }
   const dataFiles = untar.untar(dataTarContent)
 
