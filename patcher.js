@@ -1,15 +1,11 @@
-const ar = require('ar');
-const fs = require('fs');
-const xzdec = require('./xzdec');
-const untar = require('./untar');
-const iconv = require('iconv-lite');
-const ldid = require('./ldid');
-const jszip = require('jszip')
-const pako = require('pako')
-const path = require('path')
-const { decompress: lzmadec } = require('lzma/src/lzma_worker-min').LZMA
-const os = require('os')
+const ar = require('ar')
+const fs = require('fs')
+const tarcdmp = require('./tardcmp')
+const ldid = require('./ldid')
+const JSZip = require('jszip')
 const process = require('process')
+
+const patchBinary = require('./patchBinary')
 
 if (process.argv.length <= 2) {
   console.log(`Usage: ${process.argv[0]} ${process.argv[1]} [.deb file]`)
@@ -28,26 +24,13 @@ ldid().then(async runtime => {
   const debContent = fs.readFileSync(ifname)
   const debAr = new ar.Archive(debContent)
 
-  const files = debAr.getFiles();
+  const files = debAr.getFiles()
   files.forEach(f => {
     console.log(f.name(), f.fileSize())
   })
   const dataF = files
     .find(f => f.name().startsWith('data.tar'))
-  const dataTarCompressed = dataF.fileData()
-
-  let dataTarContent
-  if (dataF.name() === 'data.tar') {
-    dataTarContent = dataTarCompressed
-  } else if (dataF.name().endsWith('.xz')) {
-    dataTarContent = xzdec(dataTarCompressed)
-  } else if (dataF.name().endsWith('.lzma')) {
-    dataTarContent = lzmadec(dataTarCompressed)
-  } else if (dataF.name().endsWith('.gz')) {
-    dataTarContent = pako.inflate(dataTarCompressed)
-  }
-  const dataFiles = untar.untar(dataTarContent)
-
+  const dataFiles = tarcdmp(dataF.name(), dataF.fileData())
 
   // dylib patch
   const payloadFiles = []
@@ -55,36 +38,20 @@ ldid().then(async runtime => {
   const dylibPatchedFiles = dataFiles.map(f => {
     let { name, fileData, mode: permissions } = f
     if (name.startsWith('./')) name = name.substr(2)
-    if (name.endsWith('.deb')) return  // ignore deb file (maybe metafile?)
+    if (name.endsWith('.deb')) return // ignore deb file (maybe metafile?)
     if (name.startsWith('Library/')) name = 'var/LIB/' + name.substr(8)
-  
+    if (name.startsWith('Applications/')) {
+      console.log(' - Apps with /Applications/ content not supported')
+      throw new Error('Unsupported .deb')
+    }
+
     // fix for some offending things
     console.log(name, fileData.length)
 
     const buf = Buffer.from(fileData.slice(0, 8))
     if (buf.readUInt32BE(0) === 0xcafebabe) {
       console.log(` - applying ldid & ldid2`)
-
-      let data = iconv.decode(fileData, 'binary')
-      data = data.replace(/\/Library\//g, '/var/LIB/')
-      data = data.replace(/\/System\/var\/LIB\//g, '/System/Library/')
-      data = data.replace(/%@\/var\/LIB\//g, '%@/Library/')
-      data = data.replace(/mobile\/var\/LIB\//g, 'mobile/Library/')
-      data = data.replace(/\/usr\/lib\/libsubstrate/g, '/var/ulb/libsubstrate')
-      data = data.replace(/\/usr\/lib\/libsubstitute/g, '/var/ulb/libsubstitute')
-      data = data.replace(/\/usr\/lib\/libprefs/g, '/var/ulb/libprefs')
-      const patchedData = iconv.encode(data, 'binary')
-
-      runtime.writeFile(patchedData, 'temp.dylib')
-      if (
-        runtime.ldid_S('temp.dylib', null) !== 0 ||
-        runtime.ldid2_S('temp.dylib', null) !== 0
-      ) {
-        console.log('ldid failed! Patcher failed.')
-        throw new Error('ldid failed')
-      }
-      fileData = runtime.readFile('temp.dylib')
-
+      fileData = patchBinary(runtime, fileData)
       executableFiles.push(name)
     }
 
@@ -103,8 +70,8 @@ ldid().then(async runtime => {
   paylodDirectories = [...new Set(paylodDirectories)]
   paylodDirectories.sort()
 
-  const zip = new jszip()
-  dylibPatchedFiles.forEach(({name, fileData, permissions}) => {
+  const zip = new JSZip()
+  dylibPatchedFiles.forEach(({ name, fileData, permissions }) => {
     zip.file('Payload/' + name, fileData, {
       unixPermissions: permissions
     })
@@ -139,10 +106,10 @@ ldid().then(async runtime => {
       type: 'nodebuffer',
       compression: 'deflate',
       streamFiles: true
-  })
+    })
     .pipe(fs.createWriteStream(ofname))
     .on('finish', function () {
-      console.log("done! Quitting after 3sec");
+      console.log('done! Quitting after 3sec')
       setTimeout(() => { }, 3000)
-    });
+    })
 })
