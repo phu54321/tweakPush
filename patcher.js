@@ -124,6 +124,10 @@ ldid().then(async runtime => {
     unixPermissions: '755'
   })
 
+  zip.file('respring', '#!/var/containers/Bundle/iosbinpack64/bin/sh\nkillall SpringBoard\n', {
+    unixPermissions: '755'
+  })
+
   zip
     .generateNodeStream({
       platform: 'UNIX',

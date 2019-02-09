@@ -4,7 +4,7 @@
   "description": "",
   "main": "patcher.js",
   "scripts": {
-    "build": "pkg patcher.js"
+    "build": "pkg --targets=x86 patcher.js"
   },
   "author": "Hyun Woo Park",
   "license": "AGPL-3.0",
