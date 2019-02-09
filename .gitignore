@@ -245,3 +245,7 @@ typings/
 
 # DynamoDB Local files
 .dynamodb/
+
+
+# test packages
+com.*

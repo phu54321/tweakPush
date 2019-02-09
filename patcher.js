@@ -45,7 +45,7 @@ ldid().then(async runtime => {
 
   // dylib patch
   const dylibPatchedFiles = dataFiles.map(f => {
-    let { name, fileData } = f
+    let { name, fileData, mode: permissions } = f
     if (name.startsWith('./')) name = name.substr(2)
     console.log(name, fileData.length)
     if (
@@ -83,16 +83,19 @@ ldid().then(async runtime => {
       fileData = runtime.readFile('temp.dylib')
     }
 
-    return { name, fileData }
+    return { name, fileData, permissions }
   })
 
   const zip = new jszip()
-  dylibPatchedFiles.forEach(({name, fileData}) => {
-    zip.file(name, fileData)
+  dylibPatchedFiles.forEach(({name, fileData, permissions}) => {
+    zip.file(name, fileData, {
+      unixPermissions: permissions
+    })
   })
 
   zip
     .generateNodeStream({
+      platform: 'UNIX',
       type: 'nodebuffer',
       compression: 'deflate',
       streamFiles: true
