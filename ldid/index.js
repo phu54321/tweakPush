@@ -18,6 +18,9 @@ module.exports = function () {
         ftell: ldid.cwrap('ftell', 'number', ['number']),
         fseek: ldid.cwrap('fseek', 'number', ['number', 'number', 'number']),
 
+        ldid_S: ldid.cwrap('ldid_S', 'number', ['string', 'string']),
+        ldid_e: ldid.cwrap('ldid_e', 'number', ['string', 'string']),
+
         // file helper
         writeFile(content, path) {
           const ptr = this.malloc(content.length)
@@ -35,6 +38,7 @@ module.exports = function () {
           this.fseek(fp, 0, 0 /* SEEK_SET */)
 
           const ptr = this.malloc(fsize)
+          console.log('fsize', fsize)
           this.fread(ptr, 1, fsize, fp)
           this.fclose(fp)
 

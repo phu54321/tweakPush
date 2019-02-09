@@ -1,7 +1,12 @@
 const ldid = require('./ldid')
+const fs = require('fs')
 
 ldid().then((runtime) => {
-  runtime.writeFile(new Uint8Array([1, 2, 3, 4]), 'test')
-  const data = runtime.readFile('test')
-  console.log(data)
+  const content = fs.readFileSync('testdata/Cylinder.dylib')
+  runtime.writeFile(content, 'temp.dylib')
+
+  content2 = runtime.readFile('temp.dylib')
+  console.log(content2.length, content.length)
+
+  runtime.ldid_S('temp.dylib', null)
 })

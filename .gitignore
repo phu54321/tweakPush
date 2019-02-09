@@ -160,3 +160,6 @@ fabric.properties
 
 # clion thing
 cmake-*/
+
+# For testing
+testdata/

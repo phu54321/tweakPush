@@ -1,3 +1,8 @@
+// For compatibility w/ ldid.js
+
+#include <emscripten.h>
+FILE *stdout2; // For redirecting ldid -e
+
 /* ldid - (Mach-O) Link-Loader Identity Editor
  * Copyright (C) 2007-2012  Jay Freeman (saurik)
 */
@@ -18,8 +23,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 **/
 /* }}} */
-
-#include <emscripten.h>
 
 #include "minimal/stdlib.h"
 #include "minimal/string.h"
@@ -1165,10 +1168,12 @@ int ldid_main(int argc, const char *argv[])
       }
 
       asprintf(&temp, "%s.%s.cs", dir, base);
-      fclose(fopen(temp, "w+"));
-      _syscall(truncate(temp, offset));
+      // note: emscripten seems to not support r/w mmap properly.
+      // fclose(fopen(temp, "w+"));
+      // _syscall(truncate(temp, offset));
 
-      void *file(map(temp, 0, offset, NULL, false));
+      // void *file(map(temp, 0, offset, NULL, false));
+      void* file = malloc(offset);
       memset(file, 0, offset);
 
       fat_arch *fat_arch;
@@ -1239,6 +1244,11 @@ int ldid_main(int argc, const char *argv[])
           segment->vmsize = Align(size, 0x1000);
         }
       }
+
+      auto fp = fopen(temp, "wb");
+      fwrite(file, 1, offset, fp);
+      fclose(fp);
+      free(file);
     }
 
     if (flag_p)
@@ -1367,7 +1377,7 @@ int ldid_main(int argc, const char *argv[])
           {
             uint32_t begin = Swap(super->index[index].offset);
             struct Blob *entitlements = reinterpret_cast<struct Blob *>(blob + begin);
-            fwrite(entitlements + 1, 1, Swap(entitlements->length) - sizeof(struct Blob), stdout);
+            fwrite(entitlements + 1, 1, Swap(entitlements->length) - sizeof(struct Blob), stdout2);
           }
       }
 
@@ -1544,24 +1554,34 @@ int ldid_main(int argc, const char *argv[])
 
 extern "C"
 {
-  int sign(const char *entitlementPath, const char *filename)
+  int ldid_S(const char *codePath, const char *entitlementPath)
   {
     char str[512];
-    snprintf(str, 512, "-S%s", entitlementPath);
+
+    if (entitlementPath) {
+      snprintf(str, 512, "-S%s", entitlementPath);
+    } else {
+      strcpy(str, "-S");
+    }
 
     const char *argv[] = {
         "ldid",
         str,
-        filename};
+        codePath};
     return ldid_main(3, argv);
   }
 
-  int dumpEntitlement(const char *filename)
+  int ldid_e(const char *appPath, const char *outEntitlementPath)
   {
+    // reopen stdout
+    int outdes = dup(1);
+    stdout2 = fopen(outEntitlementPath, "w");
     const char *argv[] = {
         "ldid",
         "-e",
-        filename};
-    return ldid_main(3, argv);
+        appPath};
+    int ret = ldid_main(3, argv);
+    fclose(stdout2);
+    return ret;
   }
 }
