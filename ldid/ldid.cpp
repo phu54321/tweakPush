@@ -486,6 +486,7 @@ public:
       break;
 
     default:
+      printf("%d\n", mach_header_->magic);
       _assert(false);
     }
 

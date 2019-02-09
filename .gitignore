@@ -5,6 +5,7 @@ ldid2.arm
 ldid2.o
 ldid2.deb
 debs
+*.wasm
 _
 
 

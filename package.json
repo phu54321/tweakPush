@@ -9,6 +9,15 @@
   "author": "Hyun Woo Park",
   "license": "AGPL-3.0",
   "dependencies": {
-    "ar": "0.0.1"
+    "ar": "0.0.1",
+    "iconv-lite": "^0.4.24",
+    "jszip": "^3.1.5",
+    "lzma": "^2.3.2",
+    "untar.js": "^0.3.0"
+  },
+  "devDependencies": {
+    "nexe": "^2.0.0-rc.34",
+    "pkg": "^4.3.7",
+    "typescript": "^3.3.3"
   }
 }

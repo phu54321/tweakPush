@@ -38,7 +38,6 @@ module.exports = function () {
           this.fseek(fp, 0, 0 /* SEEK_SET */)
 
           const ptr = this.malloc(fsize)
-          console.log('fsize', fsize)
           this.fread(ptr, 1, fsize, fp)
           this.fclose(fp)
 
