@@ -19,6 +19,7 @@ module.exports = function () {
         fseek: ldid.cwrap('fseek', 'number', ['number', 'number', 'number']),
 
         ldid_S: ldid.cwrap('ldid_S', 'number', ['string', 'string']),
+        ldid2_S: ldid.cwrap('ldid2_S', 'number', ['string', 'string']),
         ldid_e: ldid.cwrap('ldid_e', 'number', ['string', 'string']),
 
         // file helper

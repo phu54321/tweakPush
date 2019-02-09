@@ -30,7 +30,7 @@ FILE *stdout2; // For redirecting ldid -e
 
 extern "C"
 {
-#include "sha1.h"
+#include "sha.h"
 }
 
 #include <cstring>
@@ -809,6 +809,14 @@ void sha1(uint8_t *hash, uint8_t *data, size_t size)
   SHA1Result(&context, hash);
 }
 
+void sha2(uint8_t *hash, uint8_t *data, size_t size)
+{
+  SHA256Context context;
+  SHA256Reset(&context);
+  SHA256Input(&context, data, size);
+  SHA256Result(&context, hash);
+}
+
 struct CodesignAllocation
 {
   FatMachHeader mach_header_;
@@ -1553,15 +1561,745 @@ int ldid_main(int argc, const char *argv[])
   return filee;
 }
 
+int ldid2_main(int argc, const char *argv[])
+{
+  union {
+    uint16_t word;
+    uint8_t byte[2];
+  } endian = {1};
+
+  little_ = endian.byte[0];
+
+  bool flag_R(false);
+  bool flag_r(false);
+
+  bool flag_t(false);
+  bool flag_p(false);
+  bool flag_u(false);
+  bool flag_e(false);
+
+  bool flag_T(false);
+
+  bool flag_S(false);
+  bool flag_s(false);
+
+  bool flag_O(false);
+
+  bool flag_D(false);
+  bool flag_d(false);
+
+  bool flag_A(false);
+  bool flag_a(false);
+
+  uint32_t flag_CPUType(_not(uint32_t));
+  uint32_t flag_CPUSubtype(_not(uint32_t));
+
+  const char *flag_I(NULL);
+
+  bool timeh(false);
+  uint32_t timev(0);
+
+  const void *xmld(NULL);
+  size_t xmls(0);
+
+  uintptr_t noffset(_not(uintptr_t));
+  uintptr_t woffset(_not(uintptr_t));
+
+  std::vector<std::string> files;
+
+  if (argc == 1)
+  {
+    fprintf(stderr, "usage: %s -S[entitlements.xml] <binary>\n", argv[0]);
+    fprintf(stderr, "   %s -e MobileSafari\n", argv[0]);
+    fprintf(stderr, "   %s -S cat\n", argv[0]);
+    fprintf(stderr, "   %s -Stfp.xml gdb\n", argv[0]);
+    exit(0);
+  }
+
+  for (int argi(1); argi != argc; ++argi)
+    if (argv[argi][0] != '-')
+      files.push_back(argv[argi]);
+    else
+      switch (argv[argi][1])
+      {
+      case 'R':
+        flag_R = true;
+        break;
+      case 'r':
+        flag_r = true;
+        break;
+
+      case 't':
+        flag_t = true;
+        break;
+      case 'u':
+        flag_u = true;
+        break;
+      case 'p':
+        flag_p = true;
+        break;
+      case 'e':
+        flag_e = true;
+        break;
+      case 'O':
+        flag_O = true;
+        break;
+
+      case 'D':
+        flag_D = true;
+        break;
+      case 'd':
+        flag_d = true;
+        break;
+
+      case 'a':
+        flag_a = true;
+        break;
+
+      case 'A':
+        flag_A = true;
+        if (argv[argi][2] != '\0')
+        {
+          const char *cpu = argv[argi] + 2;
+          const char *colon = strchr(cpu, ':');
+          _assert(colon != NULL);
+          char *arge;
+          flag_CPUType = strtoul(cpu, &arge, 0);
+          _assert(arge == colon);
+          flag_CPUSubtype = strtoul(colon + 1, &arge, 0);
+          _assert(arge == argv[argi] + strlen(argv[argi]));
+        }
+        break;
+
+      case 's':
+        _assert(!flag_S);
+        flag_s = true;
+        break;
+
+      case 'S':
+        _assert(!flag_s);
+        flag_S = true;
+        if (argv[argi][2] != '\0')
+        {
+          const char *xml = argv[argi] + 2;
+          xmld = map(xml, 0, _not(size_t), &xmls, true);
+        }
+        break;
+
+      case 'T':
+      {
+        flag_T = true;
+        if (argv[argi][2] == '-')
+          timeh = true;
+        else
+        {
+          char *arge;
+          timev = strtoul(argv[argi] + 2, &arge, 0);
+          _assert(arge == argv[argi] + strlen(argv[argi]));
+        }
+      }
+      break;
+
+      case 'I':
+      {
+        flag_I = argv[argi] + 2;
+      }
+      break;
+
+      case 'n':
+      {
+        char *arge;
+        noffset = strtoul(argv[argi] + 2, &arge, 0);
+        _assert(arge == argv[argi] + strlen(argv[argi]));
+      }
+      break;
+
+      case 'w':
+      {
+        char *arge;
+        woffset = strtoul(argv[argi] + 2, &arge, 0);
+        _assert(arge == argv[argi] + strlen(argv[argi]));
+      }
+      break;
+
+      default:
+        goto usage;
+        break;
+      }
+
+  if (files.empty())
+  usage:
+  {
+    exit(0);
+  }
+
+    size_t filei(0), filee(0);
+  _foreach(file, files) try
+  {
+    const char *path(file.c_str());
+    const char *base = strrchr(path, '/');
+    char *temp(NULL), *dir;
+
+    if (base != NULL)
+      dir = strndup_(path, base++ - path + 1);
+    else
+    {
+      dir = strdup("");
+      base = path;
+    }
+
+    const char *name(flag_I ?: base);
+
+    if (flag_r)
+    {
+      uint32_t clip(0);
+      {
+        FatHeader fat_header(Map(path));
+        _foreach(mach_header, fat_header.GetMachHeaders())
+        {
+          if (flag_A)
+          {
+            if (mach_header.GetCPUType() != flag_CPUType)
+              continue;
+            if (mach_header.GetCPUSubtype() != flag_CPUSubtype)
+              continue;
+          }
+
+          mach_header->flags = mach_header.Swap(mach_header.Swap(mach_header->flags) | MH_DYLDLINK);
+
+          uint32_t size(_not(uint32_t));
+          {
+            _foreach(load_command, mach_header.GetLoadCommands())
+            {
+              switch (mach_header.Swap(load_command->cmd))
+              {
+              case LC_CODE_SIGNATURE:
+              {
+                struct linkedit_data_command *signature = reinterpret_cast<struct linkedit_data_command *>(load_command);
+                memset(reinterpret_cast<uint8_t *>(mach_header.GetBase()) + mach_header.Swap(signature->dataoff), 0, mach_header.Swap(signature->datasize));
+                memset(signature, 0, sizeof(struct linkedit_data_command));
+
+                mach_header->ncmds = mach_header.Swap(mach_header.Swap(mach_header->ncmds) - 1);
+                mach_header->sizeofcmds = mach_header.Swap(uint32_t(mach_header.Swap(mach_header->sizeofcmds) - sizeof(struct linkedit_data_command)));
+              }
+              break;
+
+              case LC_SYMTAB:
+              {
+                struct symtab_command *symtab = reinterpret_cast<struct symtab_command *>(load_command);
+                size = mach_header.Swap(symtab->stroff) + mach_header.Swap(symtab->strsize);
+              }
+              break;
+              }
+            }
+          }
+
+          _assert(size != _not(uint32_t));
+
+          _foreach(segment, mach_header.GetSegments("__LINKEDIT"))
+          {
+            segment->filesize -= mach_header.GetSize() - size;
+
+            if (fat_arch *fat_arch = mach_header.GetFatArch())
+            {
+              fat_arch->size = fat_header.Swap(size);
+              clip = std::max(clip, fat_header.Swap(fat_arch->offset) + size);
+            }
+            else
+              clip = std::max(clip, size);
+          }
+
+          _foreach(segment, mach_header.GetSegments64("__LINKEDIT"))
+          {
+            segment->filesize -= mach_header.GetSize() - size;
+
+            if (fat_arch *fat_arch = mach_header.GetFatArch())
+            {
+              fat_arch->size = fat_header.Swap(size);
+              clip = std::max(clip, fat_header.Swap(fat_arch->offset) + size);
+            }
+            else
+              clip = std::max(clip, size);
+          }
+        }
+      }
+
+      if (clip != 0)
+        _syscall(truncate(path, clip));
+    }
+
+    if (flag_S)
+    {
+      FatHeader source(Map(path));
+
+      size_t offset(0);
+
+      if (source.IsFat())
+        offset += sizeof(fat_header) + sizeof(fat_arch) * source.Swap(source->nfat_arch);
+
+      std::vector<CodesignAllocation> allocations;
+      {
+        _foreach(mach_header, source.GetMachHeaders())
+        {
+          if (flag_A)
+          {
+            if (mach_header.GetCPUType() != flag_CPUType)
+              continue;
+            if (mach_header.GetCPUSubtype() != flag_CPUSubtype)
+              continue;
+          }
+
+          mach_header->flags = mach_header.Swap(mach_header.Swap(mach_header->flags) | MH_DYLDLINK);
+
+          size_t size(_not(size_t));
+          {
+            _foreach(load_command, mach_header.GetLoadCommands())
+            {
+              uint32_t cmd(mach_header.Swap(load_command->cmd));
+              if (cmd == LC_CODE_SIGNATURE)
+              {
+                struct linkedit_data_command *signature = reinterpret_cast<struct linkedit_data_command *>(load_command);
+                size = mach_header.Swap(signature->dataoff);
+                _assert(size < mach_header.GetSize());
+                break;
+              }
+            }
+
+            if (size == _not(size_t))
+              size = mach_header.GetSize();
+          }
+
+          size_t alloc(0);
+          alloc += sizeof(struct SuperBlob);
+          uint32_t special(0);
+
+          special = std::max(special, CSSLOT_CODEDIRECTORY);
+          alloc += sizeof(struct BlobIndex);
+          alloc += sizeof(struct CodeDirectory);
+          alloc += strlen(name) + 1;
+
+          special = std::max(special, CSSLOT_REQUIREMENTS);
+          alloc += sizeof(struct BlobIndex);
+          alloc += 0xc;
+
+          if (xmld != NULL)
+          {
+            special = std::max(special, CSSLOT_ENTITLEMENTS);
+            alloc += sizeof(struct BlobIndex);
+            alloc += sizeof(struct Blob);
+            alloc += xmls;
+          }
+
+          size_t normal((size + 0x1000 - 1) / 0x1000);
+          alloc = Align(alloc + (special + normal) * 0x20, 16);
+
+          fat_arch *fat_arch(mach_header.GetFatArch());
+          uint32_t align(fat_arch == NULL ? 0 : source.Swap(fat_arch->align));
+          offset = Align(offset, 1 << align);
+
+          allocations.push_back(CodesignAllocation(mach_header, offset, size, alloc, align));
+          offset += size + alloc;
+          offset = Align(offset, 16);
+        }
+      }
+
+      asprintf(&temp, "%s.%s.cs", dir, base);
+      // note: emscripten seems to not support r/w mmap properly.
+      // fclose(fopen(temp, "w+"));
+      // _syscall(truncate(temp, offset));
+
+      // void *file(map(temp, 0, offset, NULL, false));
+      void *file = malloc(offset);
+      memset(file, 0, offset);
+
+      fat_arch *fat_arch;
+      if (!source.IsFat())
+        fat_arch = NULL;
+      else
+      {
+        fat_header *fat_header(reinterpret_cast<struct fat_header *>(file));
+        fat_header->magic = Swap(FAT_MAGIC);
+        fat_header->nfat_arch = Swap(source.Swap(source->nfat_arch));
+        fat_arch = reinterpret_cast<struct fat_arch *>(fat_header + 1);
+      }
+
+      _foreach(allocation, allocations)
+      {
+        const FatMachHeader &source(allocation.mach_header_);
+
+        uint32_t align(allocation.size_);
+        align = Align(align, 0x10);
+
+        if (fat_arch != NULL)
+        {
+          fat_arch->cputype = Swap(source->cputype);
+          fat_arch->cpusubtype = Swap(source->cpusubtype);
+          fat_arch->offset = Swap(allocation.offset_);
+          fat_arch->size = Swap(align + allocation.alloc_);
+          fat_arch->align = Swap(allocation.align_);
+          ++fat_arch;
+        }
+
+        void *target(reinterpret_cast<uint8_t *>(file) + allocation.offset_);
+        memcpy(target, source, allocation.size_);
+        MachHeader mach_header(target, align + allocation.alloc_);
+
+        struct linkedit_data_command *signature(NULL);
+        _foreach(load_command, mach_header.GetLoadCommands())
+        {
+          uint32_t cmd(mach_header.Swap(load_command->cmd));
+          if (cmd != LC_CODE_SIGNATURE)
+            continue;
+          signature = reinterpret_cast<struct linkedit_data_command *>(load_command);
+          break;
+        }
+
+        if (signature == NULL)
+        {
+          mach_header->ncmds = mach_header.Swap(mach_header.Swap(mach_header->ncmds) + 1);
+          signature = reinterpret_cast<struct linkedit_data_command *>(reinterpret_cast<uint8_t *>(mach_header.GetLoadCommand()) + mach_header.Swap(mach_header->sizeofcmds));
+          mach_header->sizeofcmds = mach_header.Swap(mach_header.Swap(mach_header->sizeofcmds) + uint32_t(sizeof(*signature)));
+          signature->cmd = mach_header.Swap(LC_CODE_SIGNATURE);
+          signature->cmdsize = mach_header.Swap(uint32_t(sizeof(*signature)));
+        }
+
+        signature->dataoff = mach_header.Swap(align);
+        signature->datasize = mach_header.Swap(allocation.alloc_);
+
+        _foreach(segment, mach_header.GetSegments("__LINKEDIT"))
+        {
+          size_t size(mach_header.Swap(align + allocation.alloc_ - mach_header.Swap(segment->fileoff)));
+          segment->filesize = size;
+          segment->vmsize = Align(size, 0x1000);
+        }
+
+        _foreach(segment, mach_header.GetSegments64("__LINKEDIT"))
+        {
+          size_t size(mach_header.Swap(align + allocation.alloc_ - mach_header.Swap(segment->fileoff)));
+          segment->filesize = size;
+          segment->vmsize = Align(size, 0x1000);
+        }
+      }
+
+      auto fp = fopen(temp, "wb");
+      fwrite(file, 1, offset, fp);
+      fclose(fp);
+      free(file);
+    }
+
+    if (flag_p)
+      printf("path%zu='%s'\n", filei, file.c_str());
+
+    FatHeader fat_header(Map(temp == NULL ? path : temp, !(flag_R || flag_T || flag_s || flag_S || flag_O || flag_D)));
+    struct linkedit_data_command *signature(NULL);
+
+    _foreach(mach_header, fat_header.GetMachHeaders())
+    {
+      if (flag_A)
+      {
+        if (mach_header.GetCPUType() != flag_CPUType)
+          continue;
+        if (mach_header.GetCPUSubtype() != flag_CPUSubtype)
+          continue;
+      }
+
+      if (flag_a)
+        printf("cpu=0x%x:0x%x\n", mach_header.GetCPUType(), mach_header.GetCPUSubtype());
+
+      if (flag_d)
+      {
+        if (struct fat_arch *fat_arch = mach_header.GetFatArch())
+          printf("offset=0x%x\n", Swap(fat_arch->offset));
+        else
+          printf("offset=0x0\n");
+      }
+
+      if (woffset != _not(uintptr_t))
+      {
+        Pointer<uint32_t> wvalue(mach_header.GetPointer<uint32_t>(woffset));
+        if (wvalue == NULL)
+          printf("(null) %p\n", reinterpret_cast<void *>(woffset));
+        else
+          printf("0x%.08x\n", *wvalue);
+      }
+
+      if (noffset != _not(uintptr_t))
+        printf("%s\n", &*mach_header.GetPointer<char>(noffset));
+
+      if (flag_d)
+        _foreach(segment, mach_header.GetSegments("__TEXT"))
+        {
+          printf("vmaddr=0x%x\n", mach_header.Swap(segment->vmaddr));
+          printf("fileoff=0x%x\n", mach_header.Swap(segment->fileoff));
+        }
+
+      if (flag_O)
+      {
+        _foreach(section, mach_header.GetSections("__TEXT", "__text"))
+            section->addr = mach_header.Swap(0);
+      }
+
+      _foreach(load_command, mach_header.GetLoadCommands())
+      {
+        uint32_t cmd(mach_header.Swap(load_command->cmd));
+
+        if (flag_R && cmd == LC_REEXPORT_DYLIB)
+          load_command->cmd = mach_header.Swap(LC_LOAD_DYLIB);
+        else if (cmd == LC_CODE_SIGNATURE)
+          signature = reinterpret_cast<struct linkedit_data_command *>(load_command);
+        else if (cmd == LC_UUID)
+        {
+          volatile struct uuid_command *uuid_command(reinterpret_cast<struct uuid_command *>(load_command));
+
+          if (flag_u)
+          {
+            printf("uuid%zu=%.2x%.2x%.2x%.2x-%.2x%.2x-%.2x%.2x-%.2x%.2x-%.2x%.2x%.2x%.2x%.2x%.2x\n", filei,
+                   uuid_command->uuid[0], uuid_command->uuid[1], uuid_command->uuid[2], uuid_command->uuid[3],
+                   uuid_command->uuid[4], uuid_command->uuid[5], uuid_command->uuid[6], uuid_command->uuid[7],
+                   uuid_command->uuid[8], uuid_command->uuid[9], uuid_command->uuid[10], uuid_command->uuid[11],
+                   uuid_command->uuid[12], uuid_command->uuid[13], uuid_command->uuid[14], uuid_command->uuid[15]);
+          }
+        }
+        else if (cmd == LC_ID_DYLIB)
+        {
+          volatile struct dylib_command *dylib_command(reinterpret_cast<struct dylib_command *>(load_command));
+
+          if (flag_t)
+            printf("time%zu=0x%.8x\n", filei, mach_header.Swap(dylib_command->dylib.timestamp));
+
+          if (flag_T)
+          {
+            uint32_t timed;
+
+            if (!timeh)
+              timed = timev;
+            else
+            {
+              dylib_command->dylib.timestamp = 0;
+              timed = hash(reinterpret_cast<uint8_t *>(mach_header.GetBase()), mach_header.GetSize(), timev);
+            }
+
+            dylib_command->dylib.timestamp = mach_header.Swap(timed);
+          }
+        }
+        else if (cmd == LC_ENCRYPTION_INFO)
+        {
+          volatile struct encryption_info_command *encryption_info_command(reinterpret_cast<struct encryption_info_command *>(load_command));
+
+          if (flag_D)
+            encryption_info_command->cryptid = mach_header.Swap(0);
+
+          if (flag_d)
+          {
+            printf("cryptoff=0x%x\n", mach_header.Swap(encryption_info_command->cryptoff));
+            printf("cryptsize=0x%x\n", mach_header.Swap(encryption_info_command->cryptsize));
+            printf("cryptid=0x%x\n", mach_header.Swap(encryption_info_command->cryptid));
+          }
+        }
+      }
+
+      if (flag_e)
+      {
+        _assert(signature != NULL);
+
+        uint32_t data = mach_header.Swap(signature->dataoff);
+
+        uint8_t *top = reinterpret_cast<uint8_t *>(mach_header.GetBase());
+        uint8_t *blob = top + data;
+        struct SuperBlob *super = reinterpret_cast<struct SuperBlob *>(blob);
+
+        for (size_t index(0); index != Swap(super->count); ++index)
+          if (Swap(super->index[index].type) == CSSLOT_ENTITLEMENTS)
+          {
+            uint32_t begin = Swap(super->index[index].offset);
+            struct Blob *entitlements = reinterpret_cast<struct Blob *>(blob + begin);
+            fwrite(entitlements + 1, 1, Swap(entitlements->length) - sizeof(struct Blob), stdout);
+          }
+      }
+
+      if (flag_s)
+      {
+        _assert(signature != NULL);
+
+        uint32_t data = mach_header.Swap(signature->dataoff);
+
+        uint8_t *top = reinterpret_cast<uint8_t *>(mach_header.GetBase());
+        uint8_t *blob = top + data;
+        struct SuperBlob *super = reinterpret_cast<struct SuperBlob *>(blob);
+
+        for (size_t index(0); index != Swap(super->count); ++index)
+          if (Swap(super->index[index].type) == CSSLOT_CODEDIRECTORY)
+          {
+            uint32_t begin = Swap(super->index[index].offset);
+            struct CodeDirectory *directory = reinterpret_cast<struct CodeDirectory *>(blob + begin);
+
+            uint8_t(*hashes)[32] = reinterpret_cast<uint8_t(*)[32]>(blob + begin + Swap(directory->hashOffset));
+            uint32_t pages = Swap(directory->nCodeSlots);
+
+            if (pages != 1)
+              for (size_t i = 0; i != pages - 1; ++i)
+                sha2(hashes[i], top + 0x1000 * i, 0x1000);
+            if (pages != 0)
+              sha2(hashes[pages - 1], top + 0x1000 * (pages - 1), ((data - 1) % 0x1000) + 1);
+          }
+      }
+
+      if (flag_S)
+      {
+        _assert(signature != NULL);
+
+        uint32_t data = mach_header.Swap(signature->dataoff);
+        uint32_t size = mach_header.Swap(signature->datasize);
+
+        uint8_t *top = reinterpret_cast<uint8_t *>(mach_header.GetBase());
+        uint8_t *blob = top + data;
+        struct SuperBlob *super = reinterpret_cast<struct SuperBlob *>(blob);
+        super->blob.magic = Swap(CSMAGIC_EMBEDDED_SIGNATURE);
+
+        uint32_t count = xmld == NULL ? 2 : 3;
+        uint32_t offset = sizeof(struct SuperBlob) + count * sizeof(struct BlobIndex);
+
+        super->index[0].type = Swap(CSSLOT_CODEDIRECTORY);
+        super->index[0].offset = Swap(offset);
+
+        uint32_t begin = offset;
+        struct CodeDirectory *directory = reinterpret_cast<struct CodeDirectory *>(blob + begin);
+        offset += sizeof(struct CodeDirectory);
+
+        directory->blob.magic = Swap(CSMAGIC_CODEDIRECTORY);
+        directory->version = Swap(uint32_t(0x00020001));
+        directory->flags = Swap(uint32_t(0));
+        directory->codeLimit = Swap(data);
+        directory->hashSize = 0x20;
+        directory->hashType = 0x02;
+        directory->spare1 = 0x00;
+        directory->pageSize = 0x0c;
+        directory->spare2 = Swap(uint32_t(0));
+
+        directory->identOffset = Swap(offset - begin);
+        strcpy(reinterpret_cast<char *>(blob + offset), name);
+        offset += strlen(name) + 1;
+
+        uint32_t special = xmld == NULL ? CSSLOT_REQUIREMENTS : CSSLOT_ENTITLEMENTS;
+        directory->nSpecialSlots = Swap(special);
+
+        uint8_t(*hashes)[32] = reinterpret_cast<uint8_t(*)[32]>(blob + offset);
+        memset(hashes, 0, sizeof(*hashes) * special);
+
+        offset += sizeof(*hashes) * special;
+        hashes += special;
+
+        uint32_t pages = (data + 0x1000 - 1) / 0x1000;
+        directory->nCodeSlots = Swap(pages);
+
+        if (pages != 1)
+          for (size_t i = 0; i != pages - 1; ++i)
+            sha2(hashes[i], top + 0x1000 * i, 0x1000);
+        if (pages != 0)
+          sha2(hashes[pages - 1], top + 0x1000 * (pages - 1), ((data - 1) % 0x1000) + 1);
+
+        directory->hashOffset = Swap(offset - begin);
+        offset += sizeof(*hashes) * pages;
+        directory->blob.length = Swap(offset - begin);
+
+        super->index[1].type = Swap(CSSLOT_REQUIREMENTS);
+        super->index[1].offset = Swap(offset);
+
+        memcpy(blob + offset, "\xfa\xde\x0c\x01\x00\x00\x00\x0c\x00\x00\x00\x00", 0xc);
+        offset += 0xc;
+
+        if (xmld != NULL)
+        {
+          super->index[2].type = Swap(CSSLOT_ENTITLEMENTS);
+          super->index[2].offset = Swap(offset);
+
+          uint32_t begin = offset;
+          struct Blob *entitlements = reinterpret_cast<struct Blob *>(blob + begin);
+          offset += sizeof(struct Blob);
+
+          memcpy(blob + offset, xmld, xmls);
+          offset += xmls;
+
+          entitlements->magic = Swap(CSMAGIC_ENTITLEMENTS);
+          entitlements->length = Swap(offset - begin);
+        }
+
+        for (size_t index(0); index != count; ++index)
+        {
+          uint32_t type = Swap(super->index[index].type);
+          if (type != 0 && type <= special)
+          {
+            uint32_t offset = Swap(super->index[index].offset);
+            struct Blob *local = (struct Blob *)(blob + offset);
+            sha2((uint8_t *)(hashes - type), (uint8_t *)local, Swap(local->length));
+          }
+        }
+
+        super->count = Swap(count);
+        super->blob.length = Swap(offset);
+
+        if (offset > size)
+        {
+          fprintf(stderr, "offset (%u) > size (%u)\n", offset, size);
+          _assert(false);
+        } //else fprintf(stderr, "offset (%zu) <= size (%zu)\n", offset, size);
+
+        memset(blob + offset, 0, size - offset);
+      }
+    }
+
+    if (flag_S)
+    {
+      uint8_t *top = reinterpret_cast<uint8_t *>(fat_header.GetBase());
+      size_t size = fat_header.GetSize();
+
+      char *copy;
+      asprintf(&copy, "%s.%s.cp", dir, base);
+      FILE *file = fopen(copy, "w+");
+      size_t writ = fwrite(top, 1, size, file);
+      _assert(writ == size);
+      fclose(file);
+
+      _syscall(unlink(temp));
+      free(temp);
+      temp = copy;
+    }
+
+    if (temp != NULL)
+    {
+      struct stat info;
+      _syscall(stat(path, &info));
+      _syscall(chown(temp, info.st_uid, info.st_gid));
+      _syscall(chmod(temp, info.st_mode));
+      _syscall(unlink(path));
+      _syscall(rename(temp, path));
+      free(temp);
+    }
+
+    free(dir);
+    ++filei;
+  }
+  catch (const char *)
+  {
+    ++filee;
+    ++filei;
+  }
+
+  return filee;
+}
+
 extern "C"
 {
   int ldid_S(const char *codePath, const char *entitlementPath)
   {
     char str[512];
 
-    if (entitlementPath) {
+    if (entitlementPath)
+    {
       snprintf(str, 512, "-S%s", entitlementPath);
-    } else {
+    }
+    else
+    {
       strcpy(str, "-S");
     }
 
@@ -1570,6 +2308,26 @@ extern "C"
         str,
         codePath};
     return ldid_main(3, argv);
+  }
+
+  int ldid2_S(const char *codePath, const char *entitlementPath)
+  {
+    char str[512];
+
+    if (entitlementPath)
+    {
+      snprintf(str, 512, "-S%s", entitlementPath);
+    }
+    else
+    {
+      strcpy(str, "-S");
+    }
+
+    const char *argv[] = {
+        "ldid2",
+        str,
+        codePath};
+    return ldid2_main(3, argv);
   }
 
   int ldid_e(const char *appPath, const char *outEntitlementPath)

@@ -58,7 +58,7 @@ ldid().then(async runtime => {
       ) ||
       name.match(/$Library\/PreferenceBundles\/.+\/.+/)
     ) {
-      console.log(` - Signing file '${name}'`)
+      console.log(` - applying ldid`)
 
       let data = iconv.decode(fileData, 'binary')
       data = data.replace(/\/Library\//g, '/var/LIB/')
@@ -72,6 +72,14 @@ ldid().then(async runtime => {
 
       runtime.writeFile(patchedData, 'temp.dylib')
       runtime.ldid_S('temp.dylib', null)
+      fileData = runtime.readFile('temp.dylib')
+    }
+
+    if (name.endsWith('.dylib')) {
+      console.log(` - applying ldid2`)
+
+      runtime.writeFile(fileData, 'temp.dylib')
+      runtime.ldid2_S('temp.dylib', null)
       fileData = runtime.readFile('temp.dylib')
     }
 
