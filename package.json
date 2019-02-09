@@ -4,7 +4,7 @@
   "description": "",
   "main": "patcher.js",
   "scripts": {
-    "build": "pkg --targets=x86 patcher.js"
+    "build": "pkg --targets=win-x86 patcher.js && shx mv patcher.exe patcher-win.exe"
   },
   "author": "Hyun Woo Park",
   "license": "AGPL-3.0",
@@ -25,6 +25,7 @@
     "eslint-plugin-standard": "^4.0.0",
     "nexe": "^2.0.0-rc.34",
     "pkg": "^4.3.7",
+    "shx": "^0.3.2",
     "typescript": "^3.3.3"
   }
 }
