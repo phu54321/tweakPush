@@ -15,6 +15,7 @@
   "dependencies": {
     "@expo/vector-icons": "^9.0.0",
     "ar": "0.0.1",
+    "color-hash": "^1.0.3",
     "expo": "^32.0.0",
     "iconv-lite": "^0.4.24",
     "jszip": "^3.1.5",
