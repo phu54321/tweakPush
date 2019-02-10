@@ -23,21 +23,30 @@
     "pako": "^1.0.8",
     "react": "16.5.0",
     "react-native": "https://github.com/expo/react-native/archive/sdk-32.0.0.tar.gz",
-    "untar.js": "^0.3.0"
+    "untar.js": "^0.3.0",
+    "vue-native-core": "0.0.8",
+    "vue-native-helper": "0.0.10"
   },
   "devDependencies": {
+    "babel-eslint": "^10.0.1",
     "babel-preset-expo": "^5.0.0",
     "eslint": "^5.13.0",
     "eslint-config-standard": "^12.0.0",
     "eslint-config-standard-jsx": "^6.0.2",
+    "eslint-plugin-html": "^5.0.3",
     "eslint-plugin-import": "^2.16.0",
     "eslint-plugin-node": "^8.0.1",
     "eslint-plugin-promise": "^4.0.1",
     "eslint-plugin-react": "^7.12.4",
     "eslint-plugin-standard": "^4.0.0",
+    "eslint-plugin-vue": "^5.1.0",
     "nexe": "^2.0.0-rc.34",
     "pkg": "^4.3.7",
+    "pug": "^2.0.3",
+    "pug-loader": "^2.4.0",
     "shx": "^0.3.2",
-    "typescript": "^3.3.3"
+    "typescript": "^3.3.3",
+    "vue-native-custom-transformer-plugin": "^0.2.2",
+    "vue-native-scripts": "0.0.14"
   }
 }
