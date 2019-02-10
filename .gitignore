@@ -249,3 +249,11 @@ typings/
 
 # test packages
 com.*
+
+# expo related
+.expo/*
+npm-debug-*
+*.jks
+*.pl2
+*.key
+*.mobileprovision
