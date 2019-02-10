@@ -1,21 +1,35 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React from 'react'
+import { Font } from 'expo'
+import { Container, Content, Text, Header, Left, Button, Icon, Body, Title, Right } from 'native-base'
 
 export default class App extends React.Component {
-  render() {
+  async componentWillMount () {
+    await Font.loadAsync({
+      'Roboto': require('native-base/Fonts/Roboto.ttf'),
+      'Roboto_medium': require('native-base/Fonts/Roboto_medium.ttf')
+    })
+  }
+
+  render () {
     return (
-      <View style={styles.container}>
-        <Text>Open up App.js to start working on your app!</Text>
-      </View>
-    );
+      <Container>
+        <Header>
+          <Left>
+            <Button transparent>
+              <Icon name='refresh' />
+            </Button>
+          </Left>
+          <Body>
+            <Title>TweakPush</Title>
+          </Body>
+          <Right />
+        </Header>
+        <Content>
+          <Text>
+            I have changed the text color.
+          </Text>
+        </Content>
+      </Container>
+    )
   }
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
